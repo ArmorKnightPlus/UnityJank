@@ -2,49 +2,56 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+
 //Good practice if we need to assume we will have one of these
 [RequireComponent(typeof(Controller2D_SL))]
 [RequireComponent(typeof(Animator2D))]
 public class PlayerController: MonoBehaviour
 {
-    Animator2D m_Animator2D;
+    Animator2D                                      m_Animator2D;
 
-    PlayerCharacterState m_CharacterState;
-    PlayerCharacterState.ECharacterFacing m_eFacing;
-    Vector3 m_v3DefaultScale;
+    PlayerCharacterState                            m_CharacterState;
+    PlayerCharacterState.ECharacterFacing           m_eFacing;
 
-    StationaryCharacterState m_StationaryState;
-    RunCharacterState m_RunState;
-    JumpUpCharacterState m_JumpUpState;
-    FallDownCharacterState m_FallDownState;
+    PlayerCharacterState.ECharacterWeaponState      m_eWeaponState;
+    bool                                            m_bWeaponStateDirty;
+    System.Timers.Timer                             m_tmWeaponStateTimer;
+    Vector3                                         m_v3DefaultScale;
+
+    StationaryCharacterState                        m_StationaryState;
+    RunCharacterState                               m_RunState;
+    JumpUpCharacterState                            m_JumpUpState;
+    FallDownCharacterState                          m_FallDownState;
 
     //Quick teleport position
-    public Vector3 m_v3QuickTeleportPosition = new Vector3(0,4.0f);
+    public Vector3                                  m_v3QuickTeleportPosition = new Vector3(0,4.0f);
 
     //These are more intuitive ways to alter a character's jump height
     //instead of just a random velocity
-    public float m_fTimeToJumpApex = 0.5f;
-    public float m_fJumpHeight = 4;
+    public float                                    m_fTimeToJumpApex = 0.5f;
+    public float                                    m_fJumpHeight = 4;
 
     //We're solving for these, given our TimeToJumpApex and JumpHeight above
 
     //Solved via:   jumpHeight = (gravity*timeToJumpApex^2)/2
     //Aka:          deltaMovement = vInitial * time + (accel*time^2)/2
-    float m_fGravity; //= (2.0f * m_fJumpHeight)/(m_fTimeToJumpApex*m_fTimeToJumpApex);
+    //= (2.0f * m_fJumpHeight)/(m_fTimeToJumpApex*m_fTimeToJumpApex);
+    float                                           m_fGravity; 
 
     //Solved via:   m_fJumpVelocity = m_fGravity * m_fTimeToJumpApex
     //Aka:          vFinal = vInitial + accel*time
-    float m_fJumpVelocity; //= m_fGravity * m_fTimeToJumpApex
+    //= m_fGravity * m_fTimeToJumpApex
+    float                                           m_fJumpVelocity; 
 
-    float m_fAccelerationTimeAirborn = 0.0f;
-    float m_fAccelerationTimeGrounded = 0.0f;
+    float                                           m_fAccelerationTimeAirborn = 0.0f;
+    float                                           m_fAccelerationTimeGrounded = 0.0f;
 
-    float m_fVelocityXSmoothing;
+    float                                           m_fVelocityXSmoothing;
 
-    Controller2D_SL m_Controller2D;
-    float m_fMovementSpeed = 3.0f;
-    Vector3 m_v3Velocity;
-    Vector2 m_v2InputMovement;
+    Controller2D_SL                                 m_Controller2D;
+    float                                           m_fMovementSpeed = 3.0f;
+    Vector3                                         m_v3Velocity;
+    Vector2                                         m_v2InputMovement;
 
 
 
@@ -72,6 +79,16 @@ public class PlayerController: MonoBehaviour
         m_FallDownState.PlayerControllerScript = this;
 
         EnterCharacterState(PlayerCharacterState.ECharacterState.Stationary);
+        m_eWeaponState = PlayerCharacterState.ECharacterWeaponState.BlasterInactive;
+        m_tmWeaponStateTimer = new System.Timers.Timer(333);
+        m_tmWeaponStateTimer.AutoReset = false;
+        m_tmWeaponStateTimer.Elapsed +=
+            (object sender, System.Timers.ElapsedEventArgs e) =>
+            {
+                m_bWeaponStateDirty = true;
+                m_eWeaponState = PlayerCharacterState.ECharacterWeaponState.BlasterInactive;
+            };
+            
     }
 
     //Get movement from input every frame, before physics is applied
@@ -89,8 +106,23 @@ public class PlayerController: MonoBehaviour
             m_v3Velocity = Vector3.zero;
         }
 
+        if (Input.GetKeyUp(KeyCode.Z))
+        {
+            m_bWeaponStateDirty = (m_eWeaponState != PlayerCharacterState.ECharacterWeaponState.BlasterActive);
+            m_eWeaponState = PlayerCharacterState.ECharacterWeaponState.BlasterActive;
+            m_tmWeaponStateTimer.Stop();
+            m_tmWeaponStateTimer.Start();
+        }
+
+        if (m_bWeaponStateDirty)
+        {
+            m_CharacterState.CorrectWeaponState();
+            CorrectWeaponStateAnimation();
+            m_bWeaponStateDirty = false;
+        }
+
         if (m_Controller2D.m_sCollisionData.m_bAbove
-            || m_Controller2D.m_sCollisionData.m_bBelow)
+        || m_Controller2D.m_sCollisionData.m_bBelow)
         {
             m_v3Velocity.y = 0;
         }
@@ -98,16 +130,6 @@ public class PlayerController: MonoBehaviour
         m_CharacterState.Update();
         m_CharacterState.HandleInput();
 
-        //Handled in state
-        /*
-        if (Input.GetKeyDown(KeyCode.Space) && CanJump())
-        {
-            m_v3Velocity.y = m_fJumpVelocity;
-            EnterCharacterState(ECharacterState. PreJumpUp);
-        }
-         */
-
-        //m_v3Velocity.y = m_fJumpVelocity;
         float moveHoriz = Input.GetAxisRaw("Horizontal");
         float moveVert = Input.GetAxisRaw("Vertical");
         m_v2InputMovement = new Vector2(moveHoriz, moveVert);        
@@ -121,45 +143,16 @@ public class PlayerController: MonoBehaviour
         //apply gravity to our vertical velocity
         m_v3Velocity.y += m_fGravity * Time.deltaTime;
         m_Controller2D.Move(m_v3Velocity * Time.deltaTime);
-
-
-        /*
-            It might be good to have two different types of states; motion and shooting
-            Since shooting can happen in parallel with almost any form of motion, it would 
-            make sense for it to be covered under a different type of state.
-
-            It might be as simple as adding a flag, but would likely be more complicated 
-            considering you'd hold your blaster out for a short time after a shot is fired.
-
-            This, it might be more appropriate to name the changing function
-                EnterCharacterMotionState
-            Then, have motion state enums
-        */
-
-        //if (m_Controller2D.m_sCollisionData.m_bBelow)
-        //{
-        //    if (m_v3Velocity.x == 0)
-        //    {
-        //        ContinueOrEnterCharacterState(ECharacterState.Idle, m_eFacing);
-        //    }
-
-        //    else if (m_v3Velocity.x < 0)
-        //    {
-        //        ContinueOrEnterCharacterState(ECharacterState.Run, ECharacterFacing.Left);
-        //    }
-
-        //    else
-        //    {
-        //        //We should probably defer to some action here, like shooting
-        //        //But for now let's just put Idle
-        //        ContinueOrEnterCharacterState(ECharacterState.Run, ECharacterFacing.Right);
-        //    }
-        //}
     }
 
     public bool IsGrounded()
     {
         return m_Controller2D.m_sCollisionData.m_bBelow;
+    }
+
+    public PlayerCharacterState.ECharacterWeaponState GetWeaponState()
+    {
+        return m_eWeaponState;
     }
 
     public bool IsFalling()
@@ -176,10 +169,25 @@ public class PlayerController: MonoBehaviour
         }
     }
 
+    void CorrectWeaponStateAnimation()
+    {
+        //Play the current animation associated with this state
+        //BUT, we want to make sure we play from the frame of the animation 
+        // we were just on, to preserve state (for example, if you pull out a 
+        //blaster while running, we don't want the run animation to suddenly restart)
+        if (m_Animator2D && !string.IsNullOrEmpty(m_CharacterState.AnimationName))
+        {
+            m_Animator2D.PlayFromCurrentFrame(m_CharacterState.AnimationName);
+        }
+    }
+
     public void EnterCharacterState(PlayerCharacterState.ECharacterState eState)
     {
         if (!m_Animator2D)
+        {
             return;
+        }
+
         if (m_CharacterState != null)
         {
             m_CharacterState.OnExit();

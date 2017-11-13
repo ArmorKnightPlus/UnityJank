@@ -28,6 +28,7 @@ public abstract class PlayerCharacterState
 
     public abstract void OnEnter();
     public abstract void Update();
+    public abstract void CorrectWeaponState();
     public abstract void HandleInput();
     public abstract void OnExit();
     public abstract ECharacterState CharacterState { get; }
@@ -36,6 +37,7 @@ public abstract class PlayerCharacterState
 
     protected string m_sAnimationName;
     protected PlayerController m_PlayerController;
+    protected bool m_bCaresAboutFacing = true;
 
     public PlayerCharacterState()
     {
@@ -47,6 +49,7 @@ public abstract class PlayerCharacterState
 abstract class GroundedCharacterState : PlayerCharacterState
 {
     public override abstract ECharacterState CharacterState { get; }
+    public override abstract void CorrectWeaponState();
 
     public override void OnEnter()
     {
@@ -60,11 +63,28 @@ abstract class GroundedCharacterState : PlayerCharacterState
         }
     }
 
+
     public override void HandleInput()
     {
         if (Input.GetKeyDown(KeyCode.Space))
         {
             m_PlayerController.EnterCharacterState(ECharacterState.JumpUp);
+        }
+
+        if (m_bCaresAboutFacing)
+        {
+            float fMoveHoriz = Input.GetAxisRaw("Horizontal");
+            if (fMoveHoriz != 0)
+            {
+                if (fMoveHoriz < 0)
+                {
+                    m_PlayerController.EnterFacing(ECharacterFacing.Left);
+                }
+                else
+                {
+                    m_PlayerController.EnterFacing(ECharacterFacing.Right);
+                }
+            }
         }
     }
 
@@ -82,7 +102,18 @@ class StationaryCharacterState : GroundedCharacterState
 
     public override void OnEnter()
     {
-        m_sAnimationName = "Idle";
+        m_sAnimationName = m_PlayerController.GetWeaponState() == 
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive 
+            ? "Idle" 
+            : "Idle_Blaster";
+    }
+
+    public override void CorrectWeaponState()
+    {
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "Idle"
+            : "Idle_Blaster";
     }
 
     public override void Update()
@@ -133,7 +164,18 @@ class RunCharacterState : GroundedCharacterState
 
     public override void OnEnter()
     {
-        m_sAnimationName = "Run";
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "Run"
+            : "Run_Blaster";
+    }
+
+    public override void CorrectWeaponState()
+    {
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "Run"
+            : "Run_Blaster";
     }
 
     public override void Update()
@@ -143,6 +185,8 @@ class RunCharacterState : GroundedCharacterState
 
     public override void HandleInput()
     {
+        base.HandleInput();
+
         float fMoveHoriz = Input.GetAxisRaw("Horizontal");
         if (fMoveHoriz == 0)
         {
@@ -159,6 +203,7 @@ class RunCharacterState : GroundedCharacterState
 abstract class MidairCharacterState : PlayerCharacterState
 {
     public override abstract ECharacterState CharacterState { get; }
+    public override abstract void CorrectWeaponState();
 
     protected int nMidairJumps = 0;
     protected int nJumpsRemaining;
@@ -182,6 +227,22 @@ abstract class MidairCharacterState : PlayerCharacterState
             m_PlayerController.EnterCharacterState(ECharacterState.JumpUp);
         }
          */
+
+        if (m_bCaresAboutFacing)
+        {
+            float fMoveHoriz = Input.GetAxisRaw("Horizontal");
+            if (fMoveHoriz != 0)
+            {
+                if (fMoveHoriz < 0)
+                {
+                    m_PlayerController.EnterFacing(ECharacterFacing.Left);
+                }
+                else
+                {
+                    m_PlayerController.EnterFacing(ECharacterFacing.Right);
+                }
+            }
+        }
     }
 
     public override void OnExit()
@@ -204,7 +265,18 @@ class JumpUpCharacterState : MidairCharacterState
 
     public override void OnEnter()
     {
-        m_sAnimationName = "JumpUp";
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "JumpUp"
+            : "JumpUp_Blaster";
+    }
+
+    public override void CorrectWeaponState()
+    {
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "JumpUp"
+            : "JumpUp_Blaster";
     }
 
     public override void Update()
@@ -219,7 +291,7 @@ class JumpUpCharacterState : MidairCharacterState
 
     public override void HandleInput()
     {
-
+        base.HandleInput();
     }
 
     public override void OnExit()
@@ -237,7 +309,17 @@ class FallDownCharacterState : MidairCharacterState
 
     public override void OnEnter()
     {
-        m_sAnimationName = "FallDown";
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "FallDown"
+            : "FallDown_Blaster";
+    }
+    public override void CorrectWeaponState()
+    {
+        m_sAnimationName = m_PlayerController.GetWeaponState() ==
+            PlayerCharacterState.ECharacterWeaponState.BlasterInactive
+            ? "FallDown"
+            : "FallDown_Blaster";
     }
 
     public override void Update()
@@ -251,7 +333,7 @@ class FallDownCharacterState : MidairCharacterState
 
     public override void HandleInput()
     {
-
+        base.HandleInput();
     }
 
     public override void OnExit()

@@ -71,6 +71,11 @@ public class Animator2D : MonoBehaviour
         m_fNextFrameTime += m_fSecondsPerFrame;
     }
 
+    public void PlayFromCurrentFrame(string szName)
+    {
+        Play(szName, m_nCurrentFrame);
+    }
+
     public void Play(string szName, int nOverrideStartFrame = -1)
     {
         //Using a C# lambda here, as a predicate to FindIndex

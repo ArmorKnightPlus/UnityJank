@@ -2,6 +2,16 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/*
+    This works in tandem with the PlayerController to create 2D platformer physics
+    for the player. The majority of this code has been taken from the 2D platformer 
+    tutorial videos by Sebastian Lague, though I've made a few alterations.
+
+    The first video in his series can be found here:
+    https://www.youtube.com/watch?v=MbWK8bCAU2w
+*/
+
+
 [RequireComponent(typeof(BoxCollider2D))]
 public class Controller2D_SL : MonoBehaviour
 {
@@ -17,13 +27,17 @@ public class Controller2D_SL : MonoBehaviour
     {
         public bool m_bAbove, m_bBelow, m_bLeft, m_bRight;
         public bool m_bClimbingSlope;
+        public bool m_bDescendingSlope;
         public float m_fSlopeAngle;
         public float m_fSlopeAngleOld;
+
+        public Vector3 m_v3VelocityOld;
 
         public void ResetData()
         {
             m_bAbove = m_bBelow = m_bLeft = m_bRight = false;
             m_bClimbingSlope = false;
+            m_bDescendingSlope = false;
             m_fSlopeAngleOld = m_fSlopeAngle;
             m_fSlopeAngle = 0.0f;
         }
@@ -37,6 +51,7 @@ public class Controller2D_SL : MonoBehaviour
     float m_fVerticalRaySpacing;
 
     float m_fMaxClimbAngle = 80.0f;
+    float m_fMaxDescendAngle = 75.0f;
 
     BoxCollider2D m_bBoxCollider2D;
     SRaycastOrigins m_sRaycastOrigins;
@@ -77,7 +92,7 @@ public class Controller2D_SL : MonoBehaviour
         nVerticalRayCount = Mathf.Clamp(nVerticalRayCount, 2, int.MaxValue);
 
         //Space between each ray
-        m_fHorizontalRaySpacing = bounds.size.y / (nHorizontalRayCount -1);
+        m_fHorizontalRaySpacing = bounds.size.y / (nHorizontalRayCount - 1);
         m_fVerticalRaySpacing = bounds.size.x / (nVerticalRayCount - 1);
     }
 
@@ -91,6 +106,12 @@ public class Controller2D_SL : MonoBehaviour
         UpdateRaycastOrigins();
         m_sCollisionData.ResetData();
 
+        m_sCollisionData.m_v3VelocityOld = v3Velocity;
+
+        if (v3Velocity.y < 0)
+        {
+            DescendSlope(ref v3Velocity);
+        }
         if (v3Velocity.x != 0)
         {
             HorizontalCollisions(ref v3Velocity);
@@ -129,6 +150,15 @@ public class Controller2D_SL : MonoBehaviour
                 float fSlopeAngle = Vector2.Angle(rhHit.normal, Vector2.up);
                 if (i == 0 && fSlopeAngle <= m_fMaxClimbAngle)
                 {
+                    //This addresses the issue of climbing a slope from a descending slope
+                    //(basically a valley where we're doing both at the same time)
+                    if (m_sCollisionData.m_bDescendingSlope)
+                    {
+                        m_sCollisionData.m_bDescendingSlope = false;
+                        v3Velocity = m_sCollisionData.m_v3VelocityOld;
+                    }
+
+
                     //This addresses the issue of starting to climb the slope before we've
                     //reached it, leaving space between us and the ground. This is happening 
                     //because once our ray intersects the slope we will start to climb the wall
@@ -187,8 +217,8 @@ public class Controller2D_SL : MonoBehaviour
         for (int i = 0; i < nVerticalRayCount; ++i)
         {
             //Cast rays up if we're moving up, down if we're moving down
-            Vector2 v2RayOrigin = fDirectionY == -1 
-                ? m_sRaycastOrigins.m_v2BottomLeft 
+            Vector2 v2RayOrigin = fDirectionY == -1
+                ? m_sRaycastOrigins.m_v2BottomLeft
                 : m_sRaycastOrigins.m_v2TopLeft;
 
             //Shift our ray along our bound/skin
@@ -220,6 +250,8 @@ public class Controller2D_SL : MonoBehaviour
 
         //Checking for new slope, to avoid hitting it from an old slope
         //We're casting our ray from the left or right, at the height we're about to be at
+        //If we detect that our raycast hit a NEW slope, we need to start using that instead; 
+        //otherwise we could get stuck on the old slope for a frame or two
         if (m_sCollisionData.m_bClimbingSlope)
         {
             float fDirectionX = Mathf.Sign(v3Velocity.x);
@@ -245,8 +277,6 @@ public class Controller2D_SL : MonoBehaviour
     //to climb a slope; our overall speed isn't affected
     void ClimbSlope(ref Vector3 rv3Velocity, float fSlopeAngle)
     {
-
-
         float fTotalMoveVelocity = Mathf.Abs(rv3Velocity.x);
 
         //We don't want to directly set Y velocity because we could be jumping, and this would 
@@ -265,7 +295,62 @@ public class Controller2D_SL : MonoBehaviour
             m_sCollisionData.m_fSlopeAngle = fSlopeAngle;
 
             rv3Velocity.y = fClimbVelocityY;
-            rv3Velocity.x = Mathf.Cos(fSlopeAngle * Mathf.Deg2Rad) * fTotalMoveVelocity *Mathf.Sign(rv3Velocity.x);
+            rv3Velocity.x = Mathf.Cos(fSlopeAngle * Mathf.Deg2Rad) * fTotalMoveVelocity * Mathf.Sign(rv3Velocity.x);
+        }
+    }
+
+    //Translates our horizontal velocity into horizontal + vertical velocity
+    //to descend a slope; our overall speed isn't affected
+
+    /*
+        When descending, we want to raycast with the corner that is actually 
+        touching the slope; if we're moving left, use the bottom right corner, 
+        and vice versa.
+    */
+
+    void DescendSlope(ref Vector3 rv3Velocity)
+    {
+        float fDirectionX = Mathf.Sign(rv3Velocity.x);
+
+        Vector2 v2RayOrigin = fDirectionX == -1
+            ? m_sRaycastOrigins.m_v2BottomRight
+            : m_sRaycastOrigins.m_v2BottomLeft;
+
+        //Cast a ray down from our corner, as far as we can (infinity) and see if we hit anything
+        RaycastHit2D rhHit = Physics2D.Raycast(v2RayOrigin, -Vector2.up, Mathf.Infinity, m_lmCollisionMask);
+
+        if (rhHit)
+        {
+            float fSlopeAngle = Vector2.Angle(rhHit.normal, Vector2.up);
+            if (fSlopeAngle != 0 && fSlopeAngle <= m_fMaxDescendAngle)
+            {
+                //Are we moving down the slope?
+                if (Mathf.Sign(rhHit.normal.x) == fDirectionX)
+                {
+                    //Are we close enough to the slope that we're actually moving on it? Or are we floating above it?
+                    //If our distance to the slope is smaller than the distance we have to move on the Y-Axis for it to 
+                    //come into effect, then we're moving on the slope.
+                    if (rhHit.distance - fSkinWidth <= Mathf.Tan(fSlopeAngle * Mathf.Deg2Rad) * Mathf.Abs(rv3Velocity.x))
+                    {
+                        float fTotalMoveVelocity = Mathf.Abs(rv3Velocity.x);
+                        float fDescendVelocityY = Mathf.Sin(fSlopeAngle * Mathf.Deg2Rad) * fTotalMoveVelocity;
+                        rv3Velocity.x = Mathf.Cos(fSlopeAngle * Mathf.Deg2Rad) * fTotalMoveVelocity * Mathf.Sign(rv3Velocity.x);
+                        rv3Velocity.y -= fDescendVelocityY;
+
+                        m_sCollisionData.m_bBelow = true;
+                        m_sCollisionData.m_bDescendingSlope = true;
+
+                        //Cache of slope angle
+                        m_sCollisionData.m_fSlopeAngle = fSlopeAngle;
+                    }
+                }
+
+                //Otherwise we're falling down...
+                else
+                {
+                    bool bob = false;
+                }
+            }
         }
     }
 }

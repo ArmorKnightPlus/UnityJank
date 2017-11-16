@@ -282,7 +282,7 @@ public class Controller2D_SL : MonoBehaviour
         //We don't want to directly set Y velocity because we could be jumping, and this would 
         //negate the jump. We only set Y velocity if we're not jumping, which we check by seeing 
         //if our climbing velocity is NOT less than our current Y velocity
-        float fClimbVelocityY = Mathf.Sin(fSlopeAngle * Mathf.Deg2Rad) * fTotalMoveVelocity;
+        float fClimbVelocityY = (Mathf.Sin(fSlopeAngle * Mathf.Deg2Rad) * fTotalMoveVelocity);
         if (rv3Velocity.y <= fClimbVelocityY)
         {
 
@@ -310,6 +310,10 @@ public class Controller2D_SL : MonoBehaviour
 
     void DescendSlope(ref Vector3 rv3Velocity)
     {
+        //ETHAN ALTER
+        if (rv3Velocity.x == 0)
+            return;
+
         float fDirectionX = Mathf.Sign(rv3Velocity.x);
 
         Vector2 v2RayOrigin = fDirectionX == -1
@@ -343,12 +347,12 @@ public class Controller2D_SL : MonoBehaviour
                         //Cache of slope angle
                         m_sCollisionData.m_fSlopeAngle = fSlopeAngle;
                     }
-                }
 
-                //Otherwise we're falling down...
-                else
-                {
-                    bool bob = false;
+                    //AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+                    if (m_sCollisionData.m_bBelow == false)
+                    {
+                        bool bob = true;
+                    }
                 }
             }
         }

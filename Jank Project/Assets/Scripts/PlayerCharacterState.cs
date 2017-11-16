@@ -283,7 +283,13 @@ class JumpUpCharacterState : MidairCharacterState
     {
         //Change to jump up once we're out of prejump
 
-        if (m_PlayerController.IsFalling())
+        if (m_PlayerController.IsGrounded())
+        {
+            //Probably need to handle running here..
+            m_PlayerController.EnterCharacterState(ECharacterState.Stationary);
+        }
+
+        else if (m_PlayerController.IsFalling())
         {
             m_PlayerController.EnterCharacterState(ECharacterState.FallDown);
         }

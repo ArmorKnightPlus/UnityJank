@@ -132,7 +132,7 @@ public class PlayerController: MonoBehaviour
 
         float moveHoriz = Input.GetAxisRaw("Horizontal");
         float moveVert = Input.GetAxisRaw("Vertical");
-        m_v2InputMovement = new Vector2(moveHoriz, moveVert);        
+        m_v2InputMovement = new Vector2(moveHoriz, moveVert);
 
         //apply player input to our horizontal velocity
         //we're using a smoothing function to make direction change not so abrupt
